@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drawing App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="toolbar">
+            <div class="tool-section">
+                <h3>Tools</h3>
+                <div class="tool-buttons">
+                    <button id="pen-tool" class="tool-btn active">Pen</button>
+                    <button id="pencil-tool" class="tool-btn">Pencil</button>
+                    <button id="marker-tool" class="tool-btn">Marker</button>
+                    <button id="eraser-tool" class="tool-btn">Eraser</button>
+                    <button id="eyedropper-tool" class="tool-btn">Eyedropper</button>
+                    <button id="fill-tool" class="tool-btn">Fill</button>
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Color</h3>
+                <div class="color-picker-container">
+                    <input type="color" id="color-picker" value="#000000">
+                    <input type="text" id="hex-color" value="#000000" placeholder="Hex code">
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Line Properties</h3>
+                <div class="slider-container">
+                    <label for="line-width">Line Width:</label>
+                    <input type="range" id="line-width" min="1" max="50" value="5">
+                    <span id="line-width-value">5px</span>
+                </div>
+                <div class="slider-container">
+                    <label for="opacity">Opacity:</label>
+                    <input type="range" id="opacity" min="1" max="100" value="100">
+                    <span id="opacity-value">100%</span>
+                </div>
+                <div class="slider-container">
+                    <label for="start-width">Start Width:</label>
+                    <input type="range" id="start-width" min="1" max="50" value="5">
+                    <span id="start-width-value">5px</span>
+                </div>
+                <div class="slider-container">
+                    <label for="end-width">End Width:</label>
+                    <input type="range" id="end-width" min="1" max="50" value="5">
+                    <span id="end-width-value">5px</span>
+                </div>
+                <div class="slider-container">
+                    <label for="eraser-size">Eraser Size:</label>
+                    <input type="range" id="eraser-size" min="5" max="100" value="20">
+                    <span id="eraser-size-value">20px</span>
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Canvas</h3>
+                <div class="canvas-controls">
+                    <button id="clear-canvas">Clear Canvas</button>
+                    <div class="canvas-size">
+                        <input type="number" id="canvas-width" value="800" min="100" max="2000">
+                        <span>×</span>
+                        <input type="number" id="canvas-height" value="600" min="100" max="2000">
+                        <button id="resize-canvas">Resize</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Layers</h3>
+                <div class="layers-container">
+                    <div class="layer" data-layer="2">
+                        <input type="checkbox" id="layer-2-visible" checked>
+                        <label for="layer-2-visible">Layer 3</label>
+                        <input type="range" id="layer-2-opacity" min="1" max="100" value="100">
+                        <span id="layer-2-opacity-value">100%</span>
+                    </div>
+                    <div class="layer" data-layer="1">
+                        <input type="checkbox" id="layer-1-visible" checked>
+                        <label for="layer-1-visible">Layer 2</label>
+                        <input type="range" id="layer-1-opacity" min="1" max="100" value="100">
+                        <span id="layer-1-opacity-value">100%</span>
+                    </div>
+                    <div class="layer active" data-layer="0">
+                        <input type="checkbox" id="layer-0-visible" checked>
+                        <label for="layer-0-visible">Layer 1</label>
+                        <input type="range" id="layer-0-opacity" min="1" max="100" value="100">
+                        <span id="layer-0-opacity-value">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="layer-0" class="drawing-canvas active"></canvas>
+            <canvas id="layer-1" class="drawing-canvas"></canvas>
+            <canvas id="layer-2" class="drawing-canvas"></canvas>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
