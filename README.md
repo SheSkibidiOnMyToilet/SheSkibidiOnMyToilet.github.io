@@ -12,6 +12,10 @@ A web-based drawing application similar to MS Paint, with advanced features like
 - **Eyedropper**: Picks colors directly from the canvas
 - **Fill**: Fills areas with the selected color
 
+### Action Features
+- **Undo**: Allows you to step back through multiple drawing actions
+- **Share**: Share your drawing via various social platforms or download it
+
 ### Color Selection
 - Full color picker with gradient selection
 - Manual hex code input for precise color selection
@@ -27,17 +31,34 @@ A web-based drawing application similar to MS Paint, with advanced features like
 
 ### Layer System
 - Three independent layers
+- Movable layers (can be reordered in the stack)
 - Individual visibility toggles for each layer
 - Adjustable opacity for each layer
 - Ability to work on different layers without affecting others
 
+### User Accounts
+- Login and registration system
+- Guest mode for quick access
+- Automatic saving of drawings for registered users
+- Drawings automatically load when logging back in
+
+### Social Features
+- Share your drawings on WhatsApp, Facebook, Instagram, and Twitter
+- Copy a link to your drawing
+- Download your drawing as a PNG file
+
 ## Usage
 
-1. Select a drawing tool from the toolbar
-2. Choose a color using the color picker or enter a hex code
-3. Adjust line properties using the sliders
-4. Draw on the canvas
-5. Use the layer controls to manage different elements of your drawing
+1. Create an account or continue as a guest
+2. Select a drawing tool from the toolbar
+3. Choose a color using the color picker or enter a hex code
+4. Adjust line properties using the sliders
+5. Draw on the canvas
+6. Use the layer controls to manage different elements of your drawing
+7. Save, share, or download your creation
+
+## Keyboard Shortcuts
+- **Ctrl+Z**: Undo the last action
 
 ## Running the Application
 

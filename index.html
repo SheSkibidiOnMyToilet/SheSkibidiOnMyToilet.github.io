@@ -5,10 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drawing App</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- Login/Register Screen -->
+    <div id="auth-screen" class="auth-container">
+        <div class="auth-box">
+            <h2>Welcome to Drawing App</h2>
+            <div class="auth-tabs">
+                <button id="login-tab" class="auth-tab active">Login</button>
+                <button id="register-tab" class="auth-tab">Register</button>
+            </div>
+            
+            <div id="login-form" class="auth-form active">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" placeholder="Your email">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="Your password">
+                </div>
+                <button id="login-button" class="auth-button">Login</button>
+            </div>
+            
+            <div id="register-form" class="auth-form">
+                <div class="form-group">
+                    <label for="register-name">Full Name</label>
+                    <input type="text" id="register-name" placeholder="Your full name">
+                </div>
+                <div class="form-group">
+                    <label for="register-email">Email</label>
+                    <input type="email" id="register-email" placeholder="Your email">
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" placeholder="Choose a password">
+                </div>
+                <div class="form-group">
+                    <label for="register-confirm">Confirm Password</label>
+                    <input type="password" id="register-confirm" placeholder="Confirm your password">
+                </div>
+                <button id="register-button" class="auth-button">Register</button>
+            </div>
+            
+            <div class="guest-option">
+                <button id="guest-button">Continue as Guest</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Screen with Pencil Animation -->
+    <div id="loading-screen" class="loading-container" style="display: none;">
+        <div class="pencil-container">
+            <div class="pencil"></div>
+        </div>
+        <p>Loading your canvas...</p>
+    </div>
+    
+    <!-- Main Drawing App -->
+    <div id="drawing-app" class="app-container" style="display: none;">
         <div class="toolbar">
+            <div class="user-info" id="user-info">
+                <span id="username-display">Guest User</span>
+                <button id="logout-button" class="small-button">Logout</button>
+            </div>
+            
             <div class="tool-section">
                 <h3>Tools</h3>
                 <div class="tool-buttons">
@@ -18,6 +80,20 @@
                     <button id="eraser-tool" class="tool-btn">Eraser</button>
                     <button id="eyedropper-tool" class="tool-btn">Eyedropper</button>
                     <button id="fill-tool" class="tool-btn">Fill</button>
+                    <button id="image-tool" class="tool-btn">Image</button>
+                    <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                </div>
+            </div>
+            
+            <div class="tool-section">
+                <h3>Actions</h3>
+                <div class="action-buttons">
+                    <button id="undo-button" class="action-btn" onclick="undoDrawingAction()" disabled>
+                        <i class="fas fa-undo"></i> Undo
+                    </button>
+                    <button id="share-button" class="action-btn">
+                        <i class="fas fa-share-alt"></i> Share
+                    </button>
                 </div>
             </div>
             
@@ -75,20 +151,38 @@
                 <h3>Layers</h3>
                 <div class="layers-container">
                     <div class="layer" data-layer="2">
-                        <input type="checkbox" id="layer-2-visible" checked>
-                        <label for="layer-2-visible">Layer 3</label>
+                        <div class="layer-controls">
+                            <input type="checkbox" id="layer-2-visible" checked>
+                            <label for="layer-2-visible">Layer 3</label>
+                            <div class="layer-move">
+                                <button class="layer-up" data-layer="2" title="Move Layer Up"><i class="fas fa-arrow-up"></i></button>
+                                <button class="layer-down" data-layer="2" title="Move Layer Down"><i class="fas fa-arrow-down"></i></button>
+                            </div>
+                        </div>
                         <input type="range" id="layer-2-opacity" min="1" max="100" value="100">
                         <span id="layer-2-opacity-value">100%</span>
                     </div>
                     <div class="layer" data-layer="1">
-                        <input type="checkbox" id="layer-1-visible" checked>
-                        <label for="layer-1-visible">Layer 2</label>
+                        <div class="layer-controls">
+                            <input type="checkbox" id="layer-1-visible" checked>
+                            <label for="layer-1-visible">Layer 2</label>
+                            <div class="layer-move">
+                                <button class="layer-up" data-layer="1" title="Move Layer Up"><i class="fas fa-arrow-up"></i></button>
+                                <button class="layer-down" data-layer="1" title="Move Layer Down"><i class="fas fa-arrow-down"></i></button>
+                            </div>
+                        </div>
                         <input type="range" id="layer-1-opacity" min="1" max="100" value="100">
                         <span id="layer-1-opacity-value">100%</span>
                     </div>
                     <div class="layer active" data-layer="0">
-                        <input type="checkbox" id="layer-0-visible" checked>
-                        <label for="layer-0-visible">Layer 1</label>
+                        <div class="layer-controls">
+                            <input type="checkbox" id="layer-0-visible" checked>
+                            <label for="layer-0-visible">Layer 1</label>
+                            <div class="layer-move">
+                                <button class="layer-up" data-layer="0" title="Move Layer Up"><i class="fas fa-arrow-up"></i></button>
+                                <button class="layer-down" data-layer="0" title="Move Layer Down"><i class="fas fa-arrow-down"></i></button>
+                            </div>
+                        </div>
                         <input type="range" id="layer-0-opacity" min="1" max="100" value="100">
                         <span id="layer-0-opacity-value">100%</span>
                     </div>
@@ -102,6 +196,45 @@
             <canvas id="layer-2" class="drawing-canvas"></canvas>
         </div>
     </div>
+    
+    <!-- Share Modal -->
+    <div id="share-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Share Your Drawing</h2>
+            <div class="share-preview">
+                <img id="share-preview-image" src="" alt="Your drawing">
+            </div>
+            <div class="share-options">
+                <button class="share-btn" data-platform="whatsapp">
+                    <i class="fab fa-whatsapp"></i> WhatsApp
+                </button>
+                <button class="share-btn" data-platform="facebook">
+                    <i class="fab fa-facebook"></i> Facebook
+                </button>
+                <button class="share-btn" data-platform="twitter">
+                    <i class="fab fa-twitter"></i> X (Twitter)
+                </button>
+                <button id="copy-link-btn" class="share-btn">
+                    <i class="fas fa-link"></i> Copy Link
+                </button>
+                <button id="download-btn" class="share-btn">
+                    <i class="fas fa-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- View-only mode notice for shared drawings -->
+    <div id="view-only-notice" class="view-only-notice" style="display: none;">
+        <div class="notice-content">
+            <p>You are viewing a shared drawing in view-only mode.</p>
+            <p>To edit this drawing, please <a href="#" id="login-link">login</a> or <a href="#" id="register-link">register</a>.</p>
+            <button id="close-notice" class="close-notice-btn">Close</button>
+        </div>
+    </div>
+    
     <script src="script.js"></script>
+    <script src="auth.js"></script>
 </body>
 </html> 
