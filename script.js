@@ -4,6 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvasElements = document.querySelectorAll('.drawing-canvas');
     let activeLayer = 0;
     
+    // Zoom and pan functionality
+    let zoomLevel = 1;
+    let panX = 0;
+    let panY = 0;
+    const minZoom = 0.1;
+    const maxZoom = 5;
+    
     // Undo history
     const maxHistorySteps = 50;
     const history = []; // Will store snapshots of all three layers
@@ -41,7 +48,141 @@ document.addEventListener('DOMContentLoaded', () => {
     // Take initial snapshot of empty canvases
     saveToHistory();
     
-    // Update canvas z-index based on layer order
+    // Apply zoom and pan to canvas container
+    function updateCanvasTransform() {
+        const transform = `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`;
+        canvasElements.forEach(canvas => {
+            canvas.style.transform = transform;
+        });
+        
+        // Update canvas background to show edges when zoomed out
+        if (zoomLevel < 1 || panX !== 0 || panY !== 0) {
+            canvasContainer.classList.add('zoomed-out');
+        } else {
+            canvasContainer.classList.remove('zoomed-out');
+        }
+        
+        // Update zoom display
+        document.getElementById('zoom-level-value').textContent = `${Math.round(zoomLevel * 100)}%`;
+        document.getElementById('zoom-slider').value = zoomLevel * 100;
+    }
+    
+    // Zoom functionality
+    function setZoom(newZoom, centerX, centerY) {
+        // Limit zoom level
+        newZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
+        
+        // If center point is provided, zoom toward that point
+        if (centerX !== undefined && centerY !== undefined) {
+            // Calculate current mouse position in canvas space
+            const oldZoom = zoomLevel;
+            const mouseXInCanvas = (centerX - panX) / oldZoom;
+            const mouseYInCanvas = (centerY - panY) / oldZoom;
+            
+            // Calculate new pan position to keep mouse over same canvas point
+            panX = centerX - mouseXInCanvas * newZoom;
+            panY = centerY - mouseYInCanvas * newZoom;
+        }
+        
+        zoomLevel = newZoom;
+        updateCanvasTransform();
+    }
+    
+    // Add zoom event listeners
+    document.getElementById('zoom-slider').addEventListener('input', (e) => {
+        setZoom(parseInt(e.target.value) / 100);
+    });
+    
+    // Mouse wheel zoom
+    canvasContainer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        
+        // Get mouse position relative to canvas container
+        const rect = canvasContainer.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        // Determine zoom direction
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        
+        // Set new zoom level centered on mouse position
+        setZoom(zoomLevel * delta, mouseX, mouseY);
+    });
+    
+    // Pan the canvas with middle mouse button or space+drag
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let startPanX = 0;
+    let startPanY = 0;
+    let spaceKeyDown = false;
+    
+    // Space key for panning
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !spaceKeyDown) {
+            spaceKeyDown = true;
+            canvasContainer.style.cursor = 'grab';
+        }
+    });
+    
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+            spaceKeyDown = false;
+            canvasContainer.style.cursor = currentTool === 'eraser' ? 
+                `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${eraserSize}" height="${eraserSize}" viewBox="0 0 ${eraserSize} ${eraserSize}"><circle cx="${eraserSize/2}" cy="${eraserSize/2}" r="${eraserSize/2 - 1}" fill="white" stroke="black" stroke-width="1"/></svg>') ${eraserSize/2} ${eraserSize/2}, auto` :
+                'crosshair';
+        }
+    });
+    
+    canvasContainer.addEventListener('mousedown', (e) => {
+        // Middle mouse button (button 1) or space+left click for panning
+        if (e.button === 1 || (spaceKeyDown && e.button === 0)) {
+            e.preventDefault();
+            isPanning = true;
+            canvasContainer.style.cursor = 'grabbing';
+            
+            // Store starting position
+            panStartX = e.clientX;
+            panStartY = e.clientY;
+            startPanX = panX;
+            startPanY = panY;
+        }
+    });
+    
+    window.addEventListener('mousemove', (e) => {
+        if (isPanning) {
+            e.preventDefault();
+            // Calculate how far the mouse has moved
+            const dx = e.clientX - panStartX;
+            const dy = e.clientY - panStartY;
+            
+            // Update pan position
+            panX = startPanX + dx / zoomLevel;
+            panY = startPanY + dy / zoomLevel;
+            
+            updateCanvasTransform();
+        }
+    });
+    
+    window.addEventListener('mouseup', (e) => {
+        if (isPanning) {
+            isPanning = false;
+            canvasContainer.style.cursor = spaceKeyDown ? 'grab' : 
+                (currentTool === 'eraser' ? 
+                    `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${eraserSize}" height="${eraserSize}" viewBox="0 0 ${eraserSize} ${eraserSize}"><circle cx="${eraserSize/2}" cy="${eraserSize/2}" r="${eraserSize/2 - 1}" fill="white" stroke="black" stroke-width="1"/></svg>') ${eraserSize/2} ${eraserSize/2}, auto` :
+                    'crosshair');
+        }
+    });
+    
+    // Reset zoom and pan
+    document.getElementById('reset-zoom').addEventListener('click', () => {
+        zoomLevel = 1;
+        panX = 0;
+        panY = 0;
+        updateCanvasTransform();
+    });
+    
+    // Update canvas order
     function updateCanvasOrder() {
         layerOrder.forEach((layerNum, index) => {
             const canvas = document.getElementById(`layer-${layerNum}`);
@@ -361,13 +502,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Drawing functions
     function startDrawing(e) {
-        // Get correct position regardless of scroll
-        const rect = getActiveCanvas().getBoundingClientRect();
-        const scaleX = getActiveCanvas().width / rect.width;
-        const scaleY = getActiveCanvas().height / rect.height;
+        // Ignore if we're panning
+        if (isPanning) return;
         
-        lastX = (e.clientX - rect.left) * scaleX;
-        lastY = (e.clientY - rect.top) * scaleY;
+        // Get correct position regardless of scroll and zoom
+        const rect = getActiveCanvas().getBoundingClientRect();
+        const scaleX = getActiveCanvas().width / rect.width * zoomLevel;
+        const scaleY = getActiveCanvas().height / rect.height * zoomLevel;
+        
+        // Apply the inverse of the transform to get the correct canvas coordinates
+        lastX = ((e.clientX - rect.left) * scaleX) / zoomLevel - panX;
+        lastY = ((e.clientY - rect.top) * scaleY) / zoomLevel - panY;
         
         isDrawing = true;
         
@@ -407,13 +552,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = getActiveCanvas();
         const ctx = getActiveContext();
         
-        // Get correct position regardless of scroll
+        // Get correct position regardless of scroll and zoom
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+        const scaleX = canvas.width / rect.width * zoomLevel;
+        const scaleY = canvas.height / rect.height * zoomLevel;
         
-        const currentX = (e.clientX - rect.left) * scaleX;
-        const currentY = (e.clientY - rect.top) * scaleY;
+        // Apply the inverse of the transform to get the correct canvas coordinates
+        const currentX = ((e.clientX - rect.left) * scaleX) / zoomLevel - panX;
+        const currentY = ((e.clientY - rect.top) * scaleY) / zoomLevel - panY;
         
         // Configure context based on current tool
         ctx.globalAlpha = opacity;
@@ -445,6 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
                 
             case 'eraser':
+                // Ensure we're using the proper composite operation for erasing all content including images
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.lineWidth = eraserSize;
                 ctx.beginPath();
@@ -505,11 +652,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (canvas.style.display === 'none') continue;
             
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
+            const scaleX = canvas.width / rect.width * zoomLevel;
+            const scaleY = canvas.height / rect.height * zoomLevel;
             
-            const x = Math.floor((e.clientX - rect.left) * scaleX);
-            const y = Math.floor((e.clientY - rect.top) * scaleY);
+            // Apply the inverse of the transform to get the correct canvas coordinates
+            const x = Math.floor(((e.clientX - rect.left) * scaleX) / zoomLevel - panX);
+            const y = Math.floor(((e.clientY - rect.top) * scaleY) / zoomLevel - panY);
             
             try {
                 const ctx = canvas.getContext('2d');
@@ -535,11 +683,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctx = getActiveContext();
         
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
+        const scaleX = canvas.width / rect.width * zoomLevel;
+        const scaleY = canvas.height / rect.height * zoomLevel;
         
-        const startX = Math.floor((e.clientX - rect.left) * scaleX);
-        const startY = Math.floor((e.clientY - rect.top) * scaleY);
+        // Apply the inverse of the transform to get the correct canvas coordinates
+        const startX = Math.floor(((e.clientX - rect.left) * scaleX) / zoomLevel - panX);
+        const startY = Math.floor(((e.clientY - rect.top) * scaleY) / zoomLevel - panY);
         
         // Get canvas data
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -741,4 +890,374 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Expose undo function to window for easy access from HTML
     window.undoDrawingAction = undo;
+    
+    // Image handling functionality
+    const addedImages = [];
+    const imageUpload = document.getElementById('image-upload');
+    const addImageUpload = document.getElementById('add-image-upload');
+    const imagesContainer = document.querySelector('.images-container');
+    const noImagesMessage = document.querySelector('.no-images-message');
+    
+    // Set up image upload triggers
+    document.getElementById('image-tool').addEventListener('click', () => {
+        imageUpload.click();
+    });
+    
+    document.getElementById('add-image-btn').addEventListener('click', () => {
+        addImageUpload.click();
+    });
+    
+    // Handle image upload from both upload buttons
+    [imageUpload, addImageUpload].forEach(upload => {
+        upload.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                const file = e.target.files[0];
+                loadAndAddImage(file);
+                e.target.value = ''; // Reset the file input
+            }
+        });
+    });
+    
+    // Load and add image to canvas and sidebar
+    function loadAndAddImage(file) {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                // Save state before adding image
+                saveToHistory();
+                
+                // Add image to the active canvas
+                const canvas = getActiveCanvas();
+                const ctx = getActiveContext();
+                
+                // Position the image in the center of the canvas
+                const x = (canvas.width - img.width) / 2;
+                const y = (canvas.height - img.height) / 2;
+                
+                // Draw the image
+                ctx.globalAlpha = opacity;
+                ctx.drawImage(img, x, y);
+                
+                // Add image to the sidebar
+                addImageToSidebar(event.target.result, img);
+            };
+            img.src = event.target.result;
+        };
+        
+        reader.readAsDataURL(file);
+    }
+    
+    // Add image thumbnail to sidebar
+    function addImageToSidebar(dataUrl, imgElement) {
+        // Hide no images message
+        noImagesMessage.style.display = 'none';
+        
+        // Create image ID
+        const imageId = 'img-' + Date.now();
+        
+        // Create thumbnail element
+        const thumbnail = document.createElement('div');
+        thumbnail.className = 'image-thumbnail';
+        thumbnail.setAttribute('data-image-id', imageId);
+        
+        // Create the image element
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        thumbnail.appendChild(img);
+        
+        // Create delete button
+        const deleteBtn = document.createElement('div');
+        deleteBtn.className = 'delete-image';
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        thumbnail.appendChild(deleteBtn);
+        
+        // Store image data
+        addedImages.push({
+            id: imageId,
+            dataUrl: dataUrl,
+            element: imgElement
+        });
+        
+        // Add click event for editing
+        thumbnail.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-image')) {
+                // Clicked on delete button
+                deleteImage(imageId);
+            } else {
+                // Clicked on the thumbnail itself
+                openImageEditor(imageId);
+            }
+        });
+        
+        // Add to container
+        imagesContainer.appendChild(thumbnail);
+    }
+    
+    // Delete image from sidebar and optionally from canvas
+    function deleteImage(imageId, removeFromCanvas = true) {
+        // Find the image in our array
+        const imageIndex = addedImages.findIndex(img => img.id === imageId);
+        
+        if (imageIndex !== -1) {
+            // Remove from DOM
+            const thumbnail = document.querySelector(`.image-thumbnail[data-image-id="${imageId}"]`);
+            if (thumbnail) {
+                thumbnail.remove();
+            }
+            
+            // Remove from array
+            addedImages.splice(imageIndex, 1);
+            
+            // If removing from canvas, we need to save history first
+            if (removeFromCanvas) {
+                // This is a complex operation that would require redrawing the canvas without this image
+                // For simplicity, we'll let the user use the eraser to remove parts of the image as needed
+                saveToHistory();
+            }
+            
+            // Show the no images message if no images are left
+            if (addedImages.length === 0) {
+                noImagesMessage.style.display = 'block';
+            }
+        }
+    }
+    
+    // Image Editor Modal
+    const imageEditModal = document.getElementById('image-edit-modal');
+    const imageEditCanvas = document.getElementById('image-edit-canvas');
+    const imageEditCtx = imageEditCanvas.getContext('2d');
+    let currentEditingImage = null;
+    let cropMode = false;
+    let cropStart = { x: 0, y: 0 };
+    let cropEnd = { x: 0, y: 0 };
+    
+    // Open image editor
+    function openImageEditor(imageId) {
+        const image = addedImages.find(img => img.id === imageId);
+        
+        if (image) {
+            currentEditingImage = image;
+            
+            // Set up canvas size
+            imageEditCanvas.width = image.element.width;
+            imageEditCanvas.height = image.element.height;
+            
+            // Clear canvas and draw image
+            imageEditCtx.clearRect(0, 0, imageEditCanvas.width, imageEditCanvas.height);
+            imageEditCtx.drawImage(image.element, 0, 0);
+            
+            // Show modal
+            imageEditModal.style.display = 'flex';
+        }
+    }
+    
+    // Close image editor modal
+    document.querySelectorAll('#image-edit-modal .close-modal, #cancel-image-edit').forEach(element => {
+        element.addEventListener('click', () => {
+            imageEditModal.style.display = 'none';
+            cropMode = false;
+            currentEditingImage = null;
+        });
+    });
+    
+    // Apply image edits
+    document.getElementById('apply-image-edit').addEventListener('click', () => {
+        if (currentEditingImage) {
+            // Save current state before editing
+            saveToHistory();
+            
+            // Create a new image from the edited canvas
+            const newImage = new Image();
+            newImage.onload = () => {
+                // Update the image in our array
+                currentEditingImage.element = newImage;
+                currentEditingImage.dataUrl = imageEditCanvas.toDataURL();
+                
+                // Update the thumbnail
+                const thumbnail = document.querySelector(`.image-thumbnail[data-image-id="${currentEditingImage.id}"] img`);
+                if (thumbnail) {
+                    thumbnail.src = currentEditingImage.dataUrl;
+                }
+                
+                // Close modal
+                imageEditModal.style.display = 'none';
+                currentEditingImage = null;
+                cropMode = false;
+            };
+            newImage.src = imageEditCanvas.toDataURL();
+        }
+    });
+    
+    // Handle crop button
+    document.getElementById('crop-image-btn').addEventListener('click', () => {
+        cropMode = true;
+        alert('Click and drag on the image to select the crop area');
+    });
+    
+    // Handle remove button
+    document.getElementById('remove-image-btn').addEventListener('click', () => {
+        if (currentEditingImage) {
+            if (confirm('Are you sure you want to remove this image?')) {
+                deleteImage(currentEditingImage.id);
+                imageEditModal.style.display = 'none';
+                currentEditingImage = null;
+                cropMode = false;
+            }
+        }
+    });
+    
+    // Handle crop selection
+    imageEditCanvas.addEventListener('mousedown', (e) => {
+        if (!cropMode || !currentEditingImage) return;
+        
+        const rect = imageEditCanvas.getBoundingClientRect();
+        cropStart.x = e.clientX - rect.left;
+        cropStart.y = e.clientY - rect.top;
+        
+        imageEditCanvas.addEventListener('mousemove', handleCropMove);
+        window.addEventListener('mouseup', handleCropEnd);
+    });
+    
+    function handleCropMove(e) {
+        if (!cropMode || !currentEditingImage) return;
+        
+        const rect = imageEditCanvas.getBoundingClientRect();
+        cropEnd.x = e.clientX - rect.left;
+        cropEnd.y = e.clientY - rect.top;
+        
+        // Redraw the image with crop overlay
+        redrawWithCrop();
+    }
+    
+    function handleCropEnd() {
+        imageEditCanvas.removeEventListener('mousemove', handleCropMove);
+        window.removeEventListener('mouseup', handleCropEnd);
+        
+        if (cropMode && currentEditingImage) {
+            // Apply the crop
+            applyCrop();
+            cropMode = false;
+        }
+    }
+    
+    function redrawWithCrop() {
+        // Clear canvas
+        imageEditCtx.clearRect(0, 0, imageEditCanvas.width, imageEditCanvas.height);
+        
+        // Draw the original image
+        imageEditCtx.drawImage(currentEditingImage.element, 0, 0);
+        
+        // Calculate crop coordinates
+        const x = Math.min(cropStart.x, cropEnd.x);
+        const y = Math.min(cropStart.y, cropEnd.y);
+        const width = Math.abs(cropEnd.x - cropStart.x);
+        const height = Math.abs(cropEnd.y - cropStart.y);
+        
+        // Draw crop overlay
+        imageEditCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        imageEditCtx.fillRect(0, 0, imageEditCanvas.width, imageEditCanvas.height);
+        
+        // Clear the crop area
+        imageEditCtx.clearRect(x, y, width, height);
+        
+        // Draw border around crop area
+        imageEditCtx.strokeStyle = '#fff';
+        imageEditCtx.lineWidth = 2;
+        imageEditCtx.strokeRect(x, y, width, height);
+    }
+    
+    function applyCrop() {
+        // Calculate crop coordinates
+        const x = Math.min(cropStart.x, cropEnd.x);
+        const y = Math.min(cropStart.y, cropEnd.y);
+        const width = Math.abs(cropEnd.x - cropStart.x);
+        const height = Math.abs(cropEnd.y - cropStart.y);
+        
+        // Check if crop area is valid
+        if (width < 10 || height < 10) {
+            alert('Crop area is too small. Please try again.');
+            return;
+        }
+        
+        // Create a temporary canvas for the cropped image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Draw the cropped portion
+        tempCtx.drawImage(
+            imageEditCanvas,
+            x, y, width, height,
+            0, 0, width, height
+        );
+        
+        // Resize the edit canvas
+        imageEditCanvas.width = width;
+        imageEditCanvas.height = height;
+        
+        // Draw the cropped image to the edit canvas
+        imageEditCtx.drawImage(tempCanvas, 0, 0);
+    }
+    
+    // Settings Modal
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsBtn = document.getElementById('settings-btn');
+    const closeSettings = settingsModal.querySelector('.close-modal');
+    
+    // Open settings modal
+    settingsBtn.addEventListener('click', () => {
+        settingsModal.style.display = 'flex';
+    });
+    
+    // Close settings modal
+    closeSettings.addEventListener('click', () => {
+        settingsModal.style.display = 'none';
+    });
+    
+    // Theme Toggle
+    const lightThemeBtn = document.getElementById('light-theme-btn');
+    const darkThemeBtn = document.getElementById('dark-theme-btn');
+    
+    // Set theme from localStorage or default to light
+    function setInitialTheme() {
+        const savedTheme = localStorage.getItem('drawingAppTheme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-theme');
+            lightThemeBtn.classList.remove('active');
+            darkThemeBtn.classList.add('active');
+        } else {
+            document.body.classList.remove('dark-theme');
+            lightThemeBtn.classList.add('active');
+            darkThemeBtn.classList.remove('active');
+        }
+    }
+    
+    // Set initial theme
+    setInitialTheme();
+    
+    // Theme buttons event listeners
+    lightThemeBtn.addEventListener('click', () => {
+        document.body.classList.remove('dark-theme');
+        localStorage.setItem('drawingAppTheme', 'light');
+        lightThemeBtn.classList.add('active');
+        darkThemeBtn.classList.remove('active');
+    });
+    
+    darkThemeBtn.addEventListener('click', () => {
+        document.body.classList.add('dark-theme');
+        localStorage.setItem('drawingAppTheme', 'dark');
+        lightThemeBtn.classList.remove('active');
+        darkThemeBtn.classList.add('active');
+    });
+    
+    // Update canvas transform when window is resized
+    window.addEventListener('resize', () => {
+        updateCanvasTransform();
+    });
+    
+    // Initialize canvas transform
+    updateCanvasTransform();
 }); 
