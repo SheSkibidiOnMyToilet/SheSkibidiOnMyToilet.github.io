@@ -80,7 +80,6 @@
                     <button id="eraser-tool" class="tool-btn">Eraser</button>
                     <button id="eyedropper-tool" class="tool-btn">Eyedropper</button>
                     <button id="fill-tool" class="tool-btn">Fill</button>
-                    <input type="file" id="image-upload" accept="image/*" style="display: none;">
                 </div>
             </div>
             
@@ -198,18 +197,6 @@
                     </div>
                 </div>
             </div>
-            
-            <div class="tool-section">
-                <h3>Images</h3>
-                <div class="images-container">
-                    <p class="no-images-message">No images added yet</p>
-                    <!-- Image thumbnails will be added here dynamically -->
-                </div>
-                <button id="add-image-btn" class="small-button">
-                    <i class="fas fa-plus"></i> Add Image
-                </button>
-                <input type="file" id="add-image-upload" accept="image/*" style="display: none;">
-            </div>
         </div>
         
         <div class="canvas-container">
@@ -278,31 +265,6 @@
             <p>You are viewing a shared drawing in view-only mode.</p>
             <p>To edit this drawing, please <a href="#" id="login-link">login</a> or <a href="#" id="register-link">register</a>.</p>
             <button id="close-notice" class="close-notice-btn">Close</button>
-        </div>
-    </div>
-    
-    <!-- Image Crop/Edit Modal -->
-    <div id="image-edit-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Edit Image</h2>
-            <div class="image-edit-controls">
-                <div class="edit-buttons">
-                    <button id="crop-image-btn" class="edit-btn">
-                        <i class="fas fa-crop"></i> Crop
-                    </button>
-                    <button id="remove-image-btn" class="edit-btn danger">
-                        <i class="fas fa-trash"></i> Remove
-                    </button>
-                </div>
-            </div>
-            <div class="image-editor-container">
-                <canvas id="image-edit-canvas"></canvas>
-            </div>
-            <div class="modal-actions">
-                <button id="cancel-image-edit" class="modal-btn cancel">Cancel</button>
-                <button id="apply-image-edit" class="modal-btn apply">Apply</button>
-            </div>
         </div>
     </div>
     
