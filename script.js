@@ -222,12 +222,203 @@ document.addEventListener('DOMContentLoaded', () => {
     const getActiveCanvas = () => document.getElementById(`layer-${activeLayer}`);
     const getActiveContext = () => getActiveCanvas().getContext('2d');
     
+    // Drawing functions
+    function startDrawing(e) {
+        // Ignore if we're panning or if it's not the left mouse button or space is pressed
+        if (isPanning || e.button !== 0 || spaceKeyDown) return;
+        
+        const canvas = getActiveCanvas();
+        const rect = canvas.getBoundingClientRect();
+        
+        // Calculate correct coordinates accounting for zoom and pan
+        lastX = (e.clientX - rect.left) / zoomLevel - panX;
+        lastY = (e.clientY - rect.top) / zoomLevel - panY;
+        
+        // Check if coordinates are within canvas bounds
+        if (lastX < 0 || lastX >= canvas.width || lastY < 0 || lastY >= canvas.height) return;
+        
+        isDrawing = true;
+        
+        // Take a snapshot before starting to draw
+        if (currentTool !== 'eyedropper') {
+            saveToHistory();
+        }
+        
+        const ctx = getActiveContext();
+        ctx.globalAlpha = opacity;
+        
+        // Set up context based on current tool
+        switch (currentTool) {
+            case 'pen':
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = lineWidth;
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                break;
+                
+            case 'pencil':
+                ctx.fillStyle = currentColor;
+                drawPencilLine(ctx, lastX, lastY, lastX, lastY);
+                break;
+                
+            case 'marker':
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = lineWidth;
+                ctx.globalAlpha = 0.2;  // Low opacity for marker effect
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(lastX, lastY);
+                ctx.stroke();
+                break;
+                
+            case 'eraser':
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = eraserSize;
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                break;
+                
+            case 'eyedropper':
+                pickColor(e);
+                isDrawing = false;
+                break;
+                
+            case 'fill':
+                fillArea(e);
+                isDrawing = false;
+                break;
+        }
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        
+        const canvas = getActiveCanvas();
+        const ctx = getActiveContext();
+        const rect = canvas.getBoundingClientRect();
+        
+        // Calculate current position with zoom and pan correction
+        const currentX = (e.clientX - rect.left) / zoomLevel - panX;
+        const currentY = (e.clientY - rect.top) / zoomLevel - panY;
+        
+        // Check if coordinates are within canvas bounds
+        if (currentX < 0 || currentX >= canvas.width || currentY < 0 || currentY >= canvas.height) {
+            // Allow drawing to continue outside bounds, but clamp coordinates
+            const clampedX = Math.max(0, Math.min(canvas.width, currentX));
+            const clampedY = Math.max(0, Math.min(canvas.height, currentY));
+            
+            switch (currentTool) {
+                case 'pen':
+                case 'marker':
+                    ctx.lineTo(clampedX, clampedY);
+                    ctx.stroke();
+                    break;
+            }
+            return;
+        }
+        
+        switch (currentTool) {
+            case 'pen':
+                ctx.globalAlpha = opacity;
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+                break;
+                
+            case 'pencil':
+                ctx.globalAlpha = opacity;
+                drawPencilLine(ctx, lastX, lastY, currentX, currentY);
+                break;
+                
+            case 'marker':
+                ctx.globalAlpha = 0.2;  // Low opacity for marker effect
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+                break;
+                
+            case 'eraser':
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+                break;
+        }
+        
+        lastX = currentX;
+        lastY = currentY;
+    }
+    
+    function stopDrawing() {
+        if (isDrawing) {
+            const ctx = getActiveContext();
+            
+            // Reset composite operation if using eraser
+            if (currentTool === 'eraser') {
+                ctx.globalCompositeOperation = 'source-over';
+            }
+            
+            if (currentTool === 'pen' || currentTool === 'marker') {
+                ctx.closePath();
+            }
+            
+            // Reset opacity
+            ctx.globalAlpha = 1.0;
+        }
+        
+        isDrawing = false;
+    }
+    
+    // Pencil effect with grainy texture
+    function drawPencilLine(ctx, x1, y1, x2, y2) {
+        const originalGlobalAlpha = ctx.globalAlpha;
+        ctx.fillStyle = currentColor;
+        
+        const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        const points = Math.max(Math.ceil(distance), 1);
+        
+        // Draw grainy dots along the line
+        for (let i = 0; i < points; i++) {
+            const ratio = i / points;
+            const x = x1 + (x2 - x1) * ratio;
+            const y = y1 + (y2 - y1) * ratio;
+            
+            // Add some randomness for grainy effect
+            const jitterX = (Math.random() - 0.5) * lineWidth * 0.3;
+            const jitterY = (Math.random() - 0.5) * lineWidth * 0.3;
+            
+            ctx.globalAlpha = opacity * (Math.random() * 0.3 + 0.7);  // Vary opacity for grainy effect
+            
+            ctx.beginPath();
+            ctx.arc(x + jitterX, y + jitterY, Math.random() * lineWidth * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Return opacity to normal
+        ctx.globalAlpha = originalGlobalAlpha;
+    }
+    
+    // Event listeners for drawing
+    canvasContainer.addEventListener('mousedown', startDrawing);
+    canvasContainer.addEventListener('mousemove', draw);
+    canvasContainer.addEventListener('mouseup', stopDrawing);
+    canvasContainer.addEventListener('mouseout', stopDrawing);
+    
+    // Prevent context menu on right-click
+    canvasContainer.addEventListener('contextmenu', e => e.preventDefault());
+    
     // Tool selection
     const toolButtons = document.querySelectorAll('.tool-btn');
     toolButtons.forEach(button => {
         button.addEventListener('click', () => {
             // Remove active class from all buttons
-            toolButtons.forEach(btn => btn.classList.remove('active'));
+            toolButtons.forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.remove('previous');
+            });
+            
+            // Add previous class to the currently active tool if it's not eyedropper
+            const currentActive = document.querySelector('.tool-btn.active');
+            if (currentActive && currentActive.id !== 'eyedropper-tool') {
+                currentActive.classList.add('previous');
+            }
             
             // Add active class to clicked button
             button.classList.add('active');
@@ -242,8 +433,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 canvasContainer.style.cursor = 'crosshair';
             } else if (currentTool === 'fill') {
                 canvasContainer.style.cursor = 'cell';
-            } else if (currentTool === 'image') {
-                canvasContainer.style.cursor = 'copy';
             } else {
                 canvasContainer.style.cursor = 'crosshair';
             }
@@ -465,180 +654,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Image upload and placement
-    const imageInput = document.getElementById('image-upload');
-    
-    imageInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) {
-            const reader = new FileReader();
-            
-            reader.onload = (event) => {
-                const img = new Image();
-                
-                img.onload = () => {
-                    // Save state before adding image
-                    saveToHistory();
-                    
-                    const canvas = getActiveCanvas();
-                    const ctx = getActiveContext();
-                    
-                    // Calculate position to center the image
-                    const x = (canvas.width - img.width) / 2;
-                    const y = (canvas.height - img.height) / 2;
-                    
-                    // Draw the image
-                    ctx.drawImage(img, x, y);
-                };
-                
-                img.src = event.target.result;
-            };
-            
-            reader.readAsDataURL(e.target.files[0]);
-            
-            // Reset the input so the same file can be selected again
-            imageInput.value = '';
-        }
-    });
-    
-    // Drawing functions
-    function startDrawing(e) {
-        // Ignore if we're panning
-        if (isPanning) return;
-        
-        // Get correct position regardless of scroll and zoom
-        const rect = getActiveCanvas().getBoundingClientRect();
-        const scaleX = getActiveCanvas().width / rect.width * zoomLevel;
-        const scaleY = getActiveCanvas().height / rect.height * zoomLevel;
-        
-        // Apply the inverse of the transform to get the correct canvas coordinates
-        lastX = ((e.clientX - rect.left) * scaleX) / zoomLevel - panX;
-        lastY = ((e.clientY - rect.top) * scaleY) / zoomLevel - panY;
-        
-        isDrawing = true;
-        
-        // Take a snapshot before starting to draw
-        if (currentTool !== 'eyedropper') {
-            saveToHistory();
-        }
-        
-        // For marker tool, we start at the calculated position
-        if (currentTool === 'marker') {
-            const ctx = getActiveContext();
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(lastX, lastY);
-            ctx.stroke();
-        }
-        
-        // For eyedropper tool, pick color immediately on mousedown
-        if (currentTool === 'eyedropper') {
-            pickColor(e);
-        }
-        
-        // For fill tool, fill area immediately on mousedown
-        if (currentTool === 'fill') {
-            fillArea(e);
-        }
-        
-        // For image tool, trigger file input click
-        if (currentTool === 'image') {
-            document.getElementById('image-upload').click();
-        }
-    }
-    
-    function draw(e) {
-        if (!isDrawing) return;
-        
-        const canvas = getActiveCanvas();
-        const ctx = getActiveContext();
-        
-        // Get correct position regardless of scroll and zoom
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width * zoomLevel;
-        const scaleY = canvas.height / rect.height * zoomLevel;
-        
-        // Apply the inverse of the transform to get the correct canvas coordinates
-        const currentX = ((e.clientX - rect.left) * scaleX) / zoomLevel - panX;
-        const currentY = ((e.clientY - rect.top) * scaleY) / zoomLevel - panY;
-        
-        // Configure context based on current tool
-        ctx.globalAlpha = opacity;
-        
-        switch (currentTool) {
-            case 'pen':
-                ctx.strokeStyle = currentColor;
-                ctx.lineWidth = lineWidth;
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(currentX, currentY);
-                ctx.stroke();
-                break;
-                
-            case 'pencil':
-                drawPencilLine(ctx, lastX, lastY, currentX, currentY);
-                break;
-                
-            case 'marker':
-                ctx.strokeStyle = currentColor;
-                ctx.lineWidth = lineWidth;
-                ctx.globalAlpha = 0.2;  // Low opacity for marker effect
-                
-                // Draw multiple strokes for marker effect
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(currentX, currentY);
-                ctx.stroke();
-                break;
-                
-            case 'eraser':
-                // Ensure we're using the proper composite operation for erasing all content including images
-                ctx.globalCompositeOperation = 'destination-out';
-                ctx.lineWidth = eraserSize;
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(currentX, currentY);
-                ctx.stroke();
-                ctx.globalCompositeOperation = 'source-over';
-                break;
-        }
-        
-        lastX = currentX;
-        lastY = currentY;
-    }
-    
-    function stopDrawing() {
-        isDrawing = false;
-    }
-    
-    // Pencil effect with grainy texture
-    function drawPencilLine(ctx, x1, y1, x2, y2) {
-        ctx.strokeStyle = currentColor;
-        ctx.lineWidth = lineWidth;
-        
-        const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-        const points = Math.ceil(distance);
-        
-        // Draw grainy dots along the line
-        for (let i = 0; i < points; i++) {
-            const ratio = i / points;
-            const x = x1 + (x2 - x1) * ratio;
-            const y = y1 + (y2 - y1) * ratio;
-            
-            // Add some randomness for grainy effect
-            const jitterX = (Math.random() - 0.5) * lineWidth * 0.3;
-            const jitterY = (Math.random() - 0.5) * lineWidth * 0.3;
-            
-            ctx.globalAlpha = opacity * (Math.random() * 0.3 + 0.7);  // Vary opacity for grainy effect
-            
-            ctx.beginPath();
-            ctx.arc(x + jitterX, y + jitterY, Math.random() * lineWidth * 0.3, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        
-        // Return opacity to normal
-        ctx.globalAlpha = opacity;
-    }
-    
     // Eyedropper function
     function pickColor(e) {
         // Get layers in visual order (top to bottom)
@@ -652,12 +667,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (canvas.style.display === 'none') continue;
             
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width * zoomLevel;
-            const scaleY = canvas.height / rect.height * zoomLevel;
             
             // Apply the inverse of the transform to get the correct canvas coordinates
-            const x = Math.floor(((e.clientX - rect.left) * scaleX) / zoomLevel - panX);
-            const y = Math.floor(((e.clientY - rect.top) * scaleY) / zoomLevel - panY);
+            const x = Math.floor((e.clientX - rect.left) / zoomLevel - panX);
+            const y = Math.floor((e.clientY - rect.top) / zoomLevel - panY);
+            
+            // Check if coordinates are within canvas bounds
+            if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue;
             
             try {
                 const ctx = canvas.getContext('2d');
@@ -665,10 +681,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Only pick color if pixel is not transparent
                 if (pixel[3] > 0) {
-                    const color = `#${pixel[0].toString(16).padStart(2, '0')}${pixel[1].toString(16).padStart(2, '0')}${pixel[2].toString(16).padStart(2, '0')}`;
+                    // Convert to hex, padding with zeros as needed
+                    const r = pixel[0].toString(16).padStart(2, '0');
+                    const g = pixel[1].toString(16).padStart(2, '0');
+                    const b = pixel[2].toString(16).padStart(2, '0');
+                    const color = `#${r}${g}${b}`;
+                    
                     currentColor = color;
                     colorPicker.value = color;
                     hexColorInput.value = color;
+                    
+                    // Switch back to the previously used tool
+                    const previousToolBtn = document.querySelector('.tool-btn.previous');
+                    if (previousToolBtn) {
+                        previousToolBtn.click();
+                    } else {
+                        // Default back to pen tool
+                        document.getElementById('pen-tool').click();
+                    }
                     break;
                 }
             } catch (error) {
@@ -683,12 +713,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctx = getActiveContext();
         
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width * zoomLevel;
-        const scaleY = canvas.height / rect.height * zoomLevel;
         
         // Apply the inverse of the transform to get the correct canvas coordinates
-        const startX = Math.floor(((e.clientX - rect.left) * scaleX) / zoomLevel - panX);
-        const startY = Math.floor(((e.clientY - rect.top) * scaleY) / zoomLevel - panY);
+        const startX = Math.floor((e.clientX - rect.left) / zoomLevel - panX);
+        const startY = Math.floor((e.clientY - rect.top) / zoomLevel - panY);
+        
+        // Check if coordinates are within canvas bounds
+        if (startX < 0 || startX >= canvas.width || startY < 0 || startY >= canvas.height) return;
         
         // Get canvas data
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -879,43 +910,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Event listeners
-    canvasContainer.addEventListener('mousedown', startDrawing);
-    canvasContainer.addEventListener('mousemove', draw);
-    canvasContainer.addEventListener('mouseup', stopDrawing);
-    canvasContainer.addEventListener('mouseout', stopDrawing);
-    
-    // Prevent context menu on right-click
-    canvasContainer.addEventListener('contextmenu', e => e.preventDefault());
-    
     // Expose undo function to window for easy access from HTML
     window.undoDrawingAction = undo;
     
     // Image handling functionality
     const addedImages = [];
-    const imageUpload = document.getElementById('image-upload');
     const addImageUpload = document.getElementById('add-image-upload');
     const imagesContainer = document.querySelector('.images-container');
     const noImagesMessage = document.querySelector('.no-images-message');
     
-    // Set up image upload triggers
-    document.getElementById('image-tool').addEventListener('click', () => {
-        imageUpload.click();
-    });
-    
+    // Setup image upload from sidebar
     document.getElementById('add-image-btn').addEventListener('click', () => {
         addImageUpload.click();
     });
     
-    // Handle image upload from both upload buttons
-    [imageUpload, addImageUpload].forEach(upload => {
-        upload.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                const file = e.target.files[0];
-                loadAndAddImage(file);
-                e.target.value = ''; // Reset the file input
-            }
-        });
+    // Handle image upload from sidebar
+    addImageUpload.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            loadAndAddImage(file);
+            e.target.value = ''; // Reset the file input
+        }
     });
     
     // Load and add image to canvas and sidebar
@@ -939,6 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Draw the image
                 ctx.globalAlpha = opacity;
                 ctx.drawImage(img, x, y);
+                ctx.globalAlpha = 1.0;
                 
                 // Add image to the sidebar
                 addImageToSidebar(event.target.result, img);
@@ -995,8 +1011,8 @@ document.addEventListener('DOMContentLoaded', () => {
         imagesContainer.appendChild(thumbnail);
     }
     
-    // Delete image from sidebar and optionally from canvas
-    function deleteImage(imageId, removeFromCanvas = true) {
+    // Delete image from sidebar
+    function deleteImage(imageId) {
         // Find the image in our array
         const imageIndex = addedImages.findIndex(img => img.id === imageId);
         
@@ -1009,13 +1025,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Remove from array
             addedImages.splice(imageIndex, 1);
-            
-            // If removing from canvas, we need to save history first
-            if (removeFromCanvas) {
-                // This is a complex operation that would require redrawing the canvas without this image
-                // For simplicity, we'll let the user use the eraser to remove parts of the image as needed
-                saveToHistory();
-            }
             
             // Show the no images message if no images are left
             if (addedImages.length === 0) {
@@ -1080,6 +1089,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (thumbnail) {
                     thumbnail.src = currentEditingImage.dataUrl;
                 }
+                
+                // Draw the edited image to the current layer
+                const canvas = getActiveCanvas();
+                const ctx = getActiveContext();
+                
+                // Position the image in the center of the canvas
+                const x = (canvas.width - newImage.width) / 2;
+                const y = (canvas.height - newImage.height) / 2;
+                
+                // Draw the image
+                ctx.globalAlpha = opacity;
+                ctx.drawImage(newImage, x, y);
+                ctx.globalAlpha = 1.0;
                 
                 // Close modal
                 imageEditModal.style.display = 'none';
